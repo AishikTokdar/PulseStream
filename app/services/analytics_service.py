@@ -1,7 +1,7 @@
 import json
 from datetime import datetime
 from typing import Any, List, Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from redis.asyncio import Redis
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,14 +10,12 @@ from app.db.models.analytics import HourlyAnalytics
 
 
 class HourlyAnalyticsResponseSchema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
     tenant_id: str
     hour: datetime
     event_count: int
     avg_payload_size: float
     top_event_types: dict[str, int]
-
-    class Config:
-        from_attributes = True
 
 
 class AnalyticsSummaryResponseSchema(BaseModel):

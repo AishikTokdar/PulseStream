@@ -2,7 +2,7 @@ import json
 from datetime import datetime, timezone
 from typing import Any, List, Optional
 import uuid
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import String, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,6 +18,7 @@ class EventCreateSchema(BaseModel):
 
 
 class EventResponseSchema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
     id: uuid.UUID
     tenant_id: str
     event_type: str
@@ -25,9 +26,6 @@ class EventResponseSchema(BaseModel):
     payload: dict[str, Any]
     timestamp: datetime
     created_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 class EventBatchResponseSchema(BaseModel):

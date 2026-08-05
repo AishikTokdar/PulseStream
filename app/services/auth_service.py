@@ -1,6 +1,6 @@
 from typing import Optional
 from fastapi import HTTPException, status
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -28,13 +28,11 @@ class TokenResponse(BaseModel):
 
 
 class UserResponseSchema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
     id: str
     email: str
     role: str
     is_active: bool
-
-    class Config:
-        from_attributes = True
 
 
 class AuthService:
