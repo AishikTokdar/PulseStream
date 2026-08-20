@@ -14,13 +14,18 @@ from app.services.event_service import (
     EventService,
 )
 from app.services.rate_limiter import RateLimiter
-from app.workers.tasks import enrich_and_process_event_task
+from app.workers.tasks import dispatch_webhook_event_task, enrich_and_process_event_task
 from app.websocket.manager import ws_manager
 
 router = APIRouter(prefix="/events", tags=["Event Ingestion & Search"])
 
-ingest_permission = RoleChecker([UserRole.INGEST, UserRole.ADMIN])
-query_permission = RoleChecker([UserRole.INGEST, UserRole.ANALYST, UserRole.ADMIN])
+ingest_permission = RoleChecker(
+    [UserRole.INGEST, UserRole.ADMIN], required_scopes=["events:write"]
+)
+query_permission = RoleChecker(
+    [UserRole.INGEST, UserRole.ANALYST, UserRole.ADMIN], required_scopes=["events:read", "events:write"]
+)
+
 
 
 @router.post("", response_model=EventResponseSchema, status_code=status.HTTP_201_CREATED)
@@ -34,7 +39,7 @@ async def ingest_single_event(
     rate_limiter = RateLimiter(redis_client)
     await rate_limiter.check_rate_limit(f"tenant:{event_in.tenant_id}")
 
-    event_service = EventService(db)
+    event_service = EventService(db, redis_client)
     event = await event_service.ingest_event(event_in)
 
     # Broadcast event via WebSockets
@@ -50,9 +55,12 @@ async def ingest_single_event(
         },
     )
 
-    # Enqueue background enrichment Celery task
+    # Enqueue background enrichment and webhook Celery tasks
     try:
         enrich_and_process_event_task.delay(str(event.id))
+        dispatch_webhook_event_task.delay(
+            str(event.id), event.tenant_id, event.event_type, event.payload
+        )
     except Exception as e:
         print(f"Celery task dispatch warning: {e}")
 
@@ -74,10 +82,10 @@ async def ingest_batch_events(
     rate_limiter = RateLimiter(redis_client)
     await rate_limiter.check_rate_limit(f"tenant:{tenant_id}")
 
-    event_service = EventService(db)
+    event_service = EventService(db, redis_client)
     batch_result = await event_service.ingest_batch(events_in)
 
-    # Broadcast batch to WebSockets
+    # Broadcast batch to WebSockets and trigger worker tasks
     for ev in batch_result.events:
         await ws_manager.broadcast_to_tenant(
             ev.tenant_id,
@@ -92,6 +100,9 @@ async def ingest_batch_events(
         )
         try:
             enrich_and_process_event_task.delay(str(ev.id))
+            dispatch_webhook_event_task.delay(
+                str(ev.id), ev.tenant_id, ev.event_type, ev.payload
+            )
         except Exception:
             pass
 

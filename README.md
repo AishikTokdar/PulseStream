@@ -2,22 +2,23 @@
 
 **PulseStream** is a high-concurrency, real-time event ingestion, processing, and analytics platform engineered by **Aishik Tokdar** using modern Python 3.11+ backend engineering principles. Built as a flagship **pure backend portfolio project**, PulseStream demonstrates production-grade system architecture, asynchronous concurrency, distributed rate limiting, real-time WebSocket streaming, event-driven background task processing, pre-aggregated analytics caching, S3 object storage archival, and cloud-native observability.
 
-For the full architectural specification, subsystem maintenance manual, and future extension guide, see [PROJECT_REPORT.md](file:///c:/Users/Neel/Downloads/backend-proj/PROJECT_REPORT.md).
+For the full architectural specification, subsystem maintenance manual, and future extension guide, see [PROJECT_REPORT.md](PROJECT_REPORT.md).
 
 ---
 
 ## Key Backend Engineering Highlights
 
-- **High-Concurrency Asynchronous REST & WebSocket Gateway**: Built on [FastAPI](file:///c:/Users/Neel/Downloads/backend-proj/app/main.py) and AsyncIO running on `uvloop` via Uvicorn, delivering non-blocking request routing and persistent socket connections capable of scaling to thousands of concurrent client connections per second.
-- **Distributed Sliding-Window Rate Limiting Engine**: Implemented an atomic, thread-safe sliding-window rate limiter in [rate_limiter.py](file:///c:/Users/Neel/Downloads/backend-proj/app/services/rate_limiter.py) using Redis Sorted Sets (`ZADD`, `ZREMRANGEBYSCORE`, `ZCARD`, `EXPIRE`) executed inside transactional Redis pipelines to eliminate boundary burst vulnerabilities.
-- **High-Throughput Ingestion & Partial Unique Index Idempotency**: Developed single and batch ingestion endpoints in [event_service.py](file:///c:/Users/Neel/Downloads/backend-proj/app/services/event_service.py) with Pydantic v2 payload validation, atomic unit-of-work transactions, and a PostgreSQL partial unique index (`idx_events_tenant_idempotency`) to enforce strict deduplication per tenant.
-- **PostgreSQL Native TSVector Full-Text Search**: Engineered inverted keyword search over JSONB payload documents in [event.py](file:///c:/Users/Neel/Downloads/backend-proj/app/db/models/event.py) using PostgreSQL `TSVector` and GIN indexes (`idx_events_search_vector`, `idx_events_payload_gin`), achieving sub-5ms full-text lookups without the overhead of an external search cluster.
-- **Real-Time Multi-Tenant WebSocket Streaming**: Designed a pub/sub WebSocket connection manager in [manager.py](file:///c:/Users/Neel/Downloads/backend-proj/app/websocket/manager.py) and [websocket.py](file:///c:/Users/Neel/Downloads/backend-proj/app/api/v1/websocket.py) broadcasting live ingested event payloads instantly to subscribed multi-tenant subscriber channels.
-- **Event-Driven Asynchronous Task Processing**: Decoupled heavy background tasks (payload enrichment and retention data cleanup) from core HTTP handlers using RabbitMQ AMQP message broker and Celery worker pools in [tasks.py](file:///c:/Users/Neel/Downloads/backend-proj/app/workers/tasks.py).
-- **Pre-Aggregated Hourly Analytics & Write-Through Caching**: Configured a Celery Beat cron scheduler executing periodic 60-second analytics pre-computations with PostgreSQL `ON CONFLICT DO UPDATE` upserts and write-through caching in Redis (`analytics:hourly:{tenant_id}:24`), serving **sub-millisecond (< 1ms)** responses on [/api/v1/analytics](file:///c:/Users/Neel/Downloads/backend-proj/app/api/v1/analytics.py).
-- **S3 Object Storage Data Archival Pipeline**: Integrated S3-compatible MinIO client in [storage_service.py](file:///c:/Users/Neel/Downloads/backend-proj/app/services/storage_service.py) and [export.py](file:///c:/Users/Neel/Downloads/backend-proj/app/api/v1/export.py) for generating and archiving tenant JSON event payloads asynchronously to MinIO object storage buckets (`pulsestream-exports`).
-- **Stateless OAuth2 + JWT Security & Declarative RBAC**: Implemented OAuth2 Password Flow authentication with bcrypt password hashing in [security.py](file:///c:/Users/Neel/Downloads/backend-proj/app/core/security.py) and declarative Role-Based Access Control (`admin`, `analyst`, `ingest`) permission guards in [rbac.py](file:///c:/Users/Neel/Downloads/backend-proj/app/core/rbac.py).
-- **Production Enterprise Observability Stack**: Containerized 12-microservice environment in [docker-compose.yml](file:///c:/Users/Neel/Downloads/backend-proj/docker-compose.yml) featuring OpenTelemetry distributed tracing (Tempo), Prometheus metrics exposition (`/metrics`), Loki log aggregation, Nginx reverse proxying, and pre-configured Grafana dashboards.
+- **High-Concurrency Asynchronous REST & WebSocket Gateway**: Built on [FastAPI](app/main.py) and AsyncIO running on `uvloop` via Uvicorn, delivering non-blocking request routing and persistent socket connections capable of scaling to thousands of concurrent client connections per second.
+- **Distributed Sliding-Window Rate Limiting Engine**: Implemented an atomic, thread-safe sliding-window rate limiter in [rate_limiter.py](app/services/rate_limiter.py) using Redis Sorted Sets (`ZADD`, `ZREMRANGEBYSCORE`, `ZCARD`, `EXPIRE`) executed inside transactional Redis pipelines to eliminate boundary burst vulnerabilities.
+- **High-Throughput Ingestion & Partial Unique Index Idempotency**: Developed single and batch ingestion endpoints in [event_service.py](app/services/event_service.py) with Pydantic v2 payload validation, atomic unit-of-work transactions, and a PostgreSQL partial unique index (`idx_events_tenant_idempotency`) to enforce strict deduplication per tenant.
+- **PostgreSQL Native TSVector Full-Text Search**: Engineered inverted keyword search over JSONB payload documents in [event.py](app/db/models/event.py) using PostgreSQL `TSVector` and GIN indexes (`idx_events_search_vector`, `idx_events_payload_gin`), achieving sub-5ms full-text lookups without the overhead of an external search cluster.
+- **Real-Time Multi-Tenant WebSocket Streaming**: Designed a pub/sub WebSocket connection manager in [manager.py](app/websocket/manager.py) and [websocket.py](app/api/v1/websocket.py) broadcasting live ingested event payloads instantly to subscribed multi-tenant subscriber channels.
+- **Event-Driven Asynchronous Task Processing**: Decoupled heavy background tasks (payload enrichment and retention data cleanup) from core HTTP handlers using RabbitMQ AMQP message broker and Celery worker pools in [tasks.py](app/workers/tasks.py).
+- **Pre-Aggregated Hourly Analytics & Write-Through Caching**: Configured a Celery Beat cron scheduler executing periodic 60-second analytics pre-computations with PostgreSQL `ON CONFLICT DO UPDATE` upserts and write-through caching in Redis (`analytics:hourly:{tenant_id}:24`), serving **sub-millisecond (< 1ms)** responses on [/api/v1/analytics](app/api/v1/analytics.py).
+- **S3 Object Storage Data Archival Pipeline**: Integrated S3-compatible MinIO client in [storage_service.py](app/services/storage_service.py) and [export.py](app/api/v1/export.py) for generating and archiving tenant JSON event payloads asynchronously to MinIO object storage buckets (`pulsestream-exports`).
+- **Programmatic Scoped API Key Authentication (`X-API-Key`)**: Built SHA-256 hashed API key management in [api_key_service.py](app/services/api_key_service.py) and [api_keys.py](app/api/v1/api_keys.py) with sub-millisecond Redis caching and fine-grained scope authorization (`events:write`, `analytics:read`, `export:create`).
+- **Stateless OAuth2 + JWT Security & Declarative RBAC: Implemented OAuth2 Password Flow authentication with bcrypt password hashing in [security.py](app/core/security.py) and declarative Role-Based Access Control (`admin`, `analyst`, `ingest`) permission guards in [rbac.py](app/core/rbac.py).
+- **Production Enterprise Observability Stack**: Containerized 12-microservice environment in [docker-compose.yml](docker-compose.yml) featuring OpenTelemetry distributed tracing (Tempo), Prometheus metrics exposition (`/metrics`), Loki log aggregation, Nginx reverse proxying, and pre-configured Grafana dashboards.
 
 ---
 
@@ -86,45 +87,45 @@ flowchart TB
 This section breaks down step-by-step how the PulseStream backend operates across its 6 major subsystems, detailing how data flows from initial client connection to real-time delivery, database persistence, asynchronous worker execution, analytics pre-aggregation, and telemetry collection.
 
 ### 1. Client Request Gateway, Security & Rate Limiting Subsystem
-- **Nginx Edge Proxy Gateway**: All client HTTP requests and WebSocket connection requests land on port 8000 managed by Nginx ([nginx/nginx.conf](file:///c:/Users/Neel/Downloads/backend-proj/nginx/nginx.conf)). Nginx acts as the reverse proxy gateway, setting client headers (`X-Forwarded-For`, `X-Real-IP`), managing SSL/TLS termination, and performing protocol upgrade handshakes for WebSocket requests.
-- **FastAPI Asynchronous Router**: Nginx forwards HTTP requests to the FastAPI application ([app/main.py](file:///c:/Users/Neel/Downloads/backend-proj/app/main.py)) running inside Uvicorn with `uvloop` for high-concurrency non-blocking I/O routing.
-- **OAuth2 Security & RBAC Enforcement**: Protected route requests run security dependency checks ([app/core/rbac.py](file:///c:/Users/Neel/Downloads/backend-proj/app/core/rbac.py)). The user's Bearer JWT access token is decoded and cryptographically verified ([app/core/security.py](file:///c:/Users/Neel/Downloads/backend-proj/app/core/security.py)). The user's assigned role (`admin`, `analyst`, `ingest`) is checked against the route's `RoleChecker` guards. If unauthorized, HTTP 401 or 403 status is returned immediately.
-- **Distributed Sliding-Window Rate Limiting**: Before accessing database resources, client requests pass through the Redis rate limiter ([app/services/rate_limiter.py](file:///c:/Users/Neel/Downloads/backend-proj/app/services/rate_limiter.py)). Using an atomic Redis pipeline, outdated request timestamps are cleared (`ZREMRANGEBYSCORE`), the current request timestamp is recorded (`ZADD`), and total requests in the sliding window are counted (`ZCARD`). If requests exceed configured limits (`RATE_LIMIT_REQUESTS`), HTTP 429 Too Many Requests is raised.
+- **Nginx Edge Proxy Gateway**: All client HTTP requests and WebSocket connection requests land on port 8000 managed by Nginx ([nginx/nginx.conf](nginx/nginx.conf)). Nginx acts as the reverse proxy gateway, setting client headers (`X-Forwarded-For`, `X-Real-IP`), managing SSL/TLS termination, and performing protocol upgrade handshakes for WebSocket requests.
+- **FastAPI Asynchronous Router**: Nginx forwards HTTP requests to the FastAPI application ([app/main.py](app/main.py)) running inside Uvicorn with `uvloop` for high-concurrency non-blocking I/O routing.
+- **OAuth2 Security & RBAC Enforcement**: Protected route requests run security dependency checks ([app/core/rbac.py](app/core/rbac.py)). The user's Bearer JWT access token is decoded and cryptographically verified ([app/core/security.py](app/core/security.py)). The user's assigned role (`admin`, `analyst`, `ingest`) is checked against the route's `RoleChecker` guards. If unauthorized, HTTP 401 or 403 status is returned immediately.
+- **Distributed Sliding-Window Rate Limiting**: Before accessing database resources, client requests pass through the Redis rate limiter ([app/services/rate_limiter.py](app/services/rate_limiter.py)). Using an atomic Redis pipeline, outdated request timestamps are cleared (`ZREMRANGEBYSCORE`), the current request timestamp is recorded (`ZADD`), and total requests in the sliding window are counted (`ZCARD`). If requests exceed configured limits (`RATE_LIMIT_REQUESTS`), HTTP 429 Too Many Requests is raised.
 
 ---
 
 ### 2. High-Throughput Event Ingestion, Persistence & Full-Text Search Subsystem
-- **Payload Schema Validation**: Incoming event JSON payloads are validated using Pydantic v2 schemas in [event_service.py](file:///c:/Users/Neel/Downloads/backend-proj/app/services/event_service.py).
-- **Idempotency Deduplication**: If an `idempotency_key` is attached to the request, PostgreSQL evaluates a partial unique index (`idx_events_tenant_idempotency` in [event.py](file:///c:/Users/Neel/Downloads/backend-proj/app/db/models/event.py)). Duplicate events with matching tenant ID and idempotency key are rejected, preventing duplicate processing.
+- **Payload Schema Validation**: Incoming event JSON payloads are validated using Pydantic v2 schemas in [event_service.py](app/services/event_service.py).
+- **Idempotency Deduplication**: If an `idempotency_key` is attached to the request, PostgreSQL evaluates a partial unique index (`idx_events_tenant_idempotency` in [event.py](app/db/models/event.py)). Duplicate events with matching tenant ID and idempotency key are rejected, preventing duplicate processing.
 - **Async Database Persistence**: Validated events are committed to PostgreSQL 16 via SQLAlchemy 2.0 async sessions using `asyncpg` drivers.
 - **PostgreSQL Native TSVector Inverted Indexing**: PostgreSQL automatically computes full-text search vectors (`TSVector`) over event types and JSONB payloads. These vectors are indexed using GIN inverted indexes (`idx_events_search_vector`), allowing clients to run instant full-text search queries on `/api/v1/events/search` with sub-5ms latency without requiring an external search cluster like Elasticsearch.
 
 ---
 
 ### 3. Real-Time Multi-Tenant WebSocket Broadcast Subsystem
-- **Connection Room Management**: Frontend dashboards connect to `/api/v1/ws/events?tenant_id=XYZ` ([app/websocket/manager.py](file:///c:/Users/Neel/Downloads/backend-proj/app/websocket/manager.py)). The `ConnectionManager` accepts sockets and groups them into tenant-isolated active connection pools.
+- **Connection Room Management**: Frontend dashboards connect to `/api/v1/ws/events?tenant_id=XYZ` ([app/websocket/manager.py](app/websocket/manager.py)). The `ConnectionManager` accepts sockets and groups them into tenant-isolated active connection pools.
 - **Zero-Latency Ingestion Broadcast**: When a REST event ingestion request succeeds, FastAPI immediately invokes `manager.broadcast_to_tenant()`. The event payload is serialized to JSON and broadcast asynchronously over active WebSocket connections for that tenant in real-time, delivering push notifications with zero HTTP polling latency.
 
 ---
 
 ### 4. Event-Driven Asynchronous Worker Pipeline Subsystem
 - **Task Queue Decoupling**: Offloads non-critical, heavy computational tasks from the primary HTTP thread pool to prevent blocking API responses.
-- **RabbitMQ Task Dispatching**: Ingestion handlers publish background tasks (e.g. payload metadata enrichment) to RabbitMQ AMQP message broker queues ([app/workers/celery_app.py](file:///c:/Users/Neel/Downloads/backend-proj/app/workers/celery_app.py)).
-- **Celery Worker Execution**: Celery worker processes ([app/workers/tasks.py](file:///c:/Users/Neel/Downloads/backend-proj/app/workers/tasks.py)) consume tasks asynchronously from RabbitMQ queues, execute data enrichment or data retention pruning, and update database records out-of-band.
+- **RabbitMQ Task Dispatching**: Ingestion handlers publish background tasks (e.g. payload metadata enrichment) to RabbitMQ AMQP message broker queues ([app/workers/celery_app.py](app/workers/celery_app.py)).
+- **Celery Worker Execution**: Celery worker processes ([app/workers/tasks.py](app/workers/tasks.py)) consume tasks asynchronously from RabbitMQ queues, execute data enrichment or data retention pruning, and update database records out-of-band.
 
 ---
 
 ### 5. Pre-Aggregated Hourly Analytics & Write-Through Cache Subsystem
-- **Periodic Celery Beat Cron Scheduler**: Every 60 seconds, Celery Beat triggers `compute_hourly_analytics_task` ([app/workers/tasks.py](file:///c:/Users/Neel/Downloads/backend-proj/app/workers/tasks.py)).
-- **PostgreSQL Upsert Aggregation**: The background task queries raw events over a 24-hour lookback window, groups metrics by hour (`event_count`, `avg_payload_size`, `top_event_types`), and executes a PostgreSQL `ON CONFLICT DO UPDATE` upsert into the `hourly_analytics` table ([app/db/models/analytics.py](file:///c:/Users/Neel/Downloads/backend-proj/app/db/models/analytics.py)).
+- **Periodic Celery Beat Cron Scheduler**: Every 60 seconds, Celery Beat triggers `compute_hourly_analytics_task` ([app/workers/tasks.py](app/workers/tasks.py)).
+- **PostgreSQL Upsert Aggregation**: The background task queries raw events over a 24-hour lookback window, groups metrics by hour (`event_count`, `avg_payload_size`, `top_event_types`), and executes a PostgreSQL `ON CONFLICT DO UPDATE` upsert into the `hourly_analytics` table ([app/db/models/analytics.py](app/db/models/analytics.py)).
 - **Write-Through Redis Cache Updating**: The computed analytics summary is stored directly into Redis key `analytics:hourly:{tenant_id}:24` with a 300-second TTL.
-- **Sub-Millisecond Analytics Endpoint**: When an `analyst` queries `/api/v1/analytics` ([app/services/analytics_service.py](file:///c:/Users/Neel/Downloads/backend-proj/app/services/analytics_service.py)), FastAPI reads directly from Redis, delivering **sub-millisecond (< 1ms)** responses without executing heavy SQL `GROUP BY` aggregations on raw tables.
+- **Sub-Millisecond Analytics Endpoint**: When an `analyst` queries `/api/v1/analytics` ([app/services/analytics_service.py](app/services/analytics_service.py)), FastAPI reads directly from Redis, delivering **sub-millisecond (< 1ms)** responses without executing heavy SQL `GROUP BY` aggregations on raw tables.
 
 ---
 
 ### 6. S3 Data Export Archival & Cloud-Native Observability Subsystem
-- **MinIO Object Archival**: Triggered via `/api/v1/export` ([app/services/storage_service.py](file:///c:/Users/Neel/Downloads/backend-proj/app/services/storage_service.py)), tenant event streams are queried, formatted as JSON file archives, and streamed asynchronously to S3-compatible MinIO buckets (`pulsestream-exports`).
-- **Cloud-Native Observability Telemetry**: OpenTelemetry ([app/observability/otel.py](file:///c:/Users/Neel/Downloads/backend-proj/app/observability/otel.py)) auto-instruments HTTP requests, SQLAlchemy queries, Redis lookups, and Celery tasks. Spans ship via OTLP to Tempo (:3200), metrics ship to Prometheus (:9090), container logs ship to Loki (:3100), and all are visualised inside pre-configured Grafana dashboards (:3000) orchestrated via [docker-compose.yml](file:///c:/Users/Neel/Downloads/backend-proj/docker-compose.yml).
+- **MinIO Object Archival**: Triggered via `/api/v1/export` ([app/services/storage_service.py](app/services/storage_service.py)), tenant event streams are queried, formatted as JSON file archives, and streamed asynchronously to S3-compatible MinIO buckets (`pulsestream-exports`).
+- **Cloud-Native Observability Telemetry**: OpenTelemetry ([app/observability/otel.py](app/observability/otel.py)) auto-instruments HTTP requests, SQLAlchemy queries, Redis lookups, and Celery tasks. Spans ship via OTLP to Tempo (:3200), metrics ship to Prometheus (:9090), container logs ship to Loki (:3100), and all are visualised inside pre-configured Grafana dashboards (:3000) orchestrated via [docker-compose.yml](docker-compose.yml).
 
 ---
 
@@ -232,28 +233,28 @@ backend-proj/
 
 | Module / Component | File Path | Engineering Role & Description |
 | :--- | :--- | :--- |
-| **Application Gateway** | [app/main.py](file:///c:/Users/Neel/Downloads/backend-proj/app/main.py) | FastAPI initialization, CORS middleware, OpenTelemetry setup, router registration. |
-| **Configuration Core** | [app/core/config.py](file:///c:/Users/Neel/Downloads/backend-proj/app/core/config.py) | `Pydantic-settings` strict environment variable validation and type casting. |
-| **Database Core** | [app/core/database.py](file:///c:/Users/Neel/Downloads/backend-proj/app/core/database.py) | Async SQLAlchemy 2.0 engine (`create_async_engine`) and `async_sessionmaker`. |
-| **Cache Core** | [app/core/redis.py](file:///c:/Users/Neel/Downloads/backend-proj/app/core/redis.py) | Async Redis connection client factory. |
-| **Storage Core** | [app/core/minio.py](file:///c:/Users/Neel/Downloads/backend-proj/app/core/minio.py) | S3 MinIO storage client setup and automatic bucket creation. |
-| **Security Module** | [app/core/security.py](file:///c:/Users/Neel/Downloads/backend-proj/app/core/security.py) | Bcrypt password hashing (`passlib`) and signed JWT encoding/decoding (`pyjwt`). |
-| **RBAC Security Guard** | [app/core/rbac.py](file:///c:/Users/Neel/Downloads/backend-proj/app/core/rbac.py) | `UserRole` enum (`admin`, `analyst`, `ingest`) and declarative `RoleChecker` dependency. |
-| **Event Model** | [app/db/models/event.py](file:///c:/Users/Neel/Downloads/backend-proj/app/db/models/event.py) | PostgreSQL `Event` model featuring JSONB, `TSVector`, GIN indexes, and partial unique index. |
-| **User Model** | [app/db/models/user.py](file:///c:/Users/Neel/Downloads/backend-proj/app/db/models/user.py) | `User` model with UUID primary keys, unique email, role enums, and timestamps. |
-| **Analytics Model** | [app/db/models/analytics.py](file:///c:/Users/Neel/Downloads/backend-proj/app/db/models/analytics.py) | `HourlyAnalytics` model storing tenant hourly pre-computations with unique constraints. |
-| **Auth Service** | [app/services/auth_service.py](file:///c:/Users/Neel/Downloads/backend-proj/app/services/auth_service.py) | Business logic for registration, authentication, token refresh, and user lookups. |
-| **Event Service** | [app/services/event_service.py](file:///c:/Users/Neel/Downloads/backend-proj/app/services/event_service.py) | Single and batch ingestion service, PostgreSQL TSVector full-text search executor. |
-| **Analytics Service** | [app/services/analytics_service.py](file:///c:/Users/Neel/Downloads/backend-proj/app/services/analytics_service.py) | Analytics service implementing Redis cache-first lookups with fallback DB queries. |
-| **Rate Limiter Service** | [app/services/rate_limiter.py](file:///c:/Users/Neel/Downloads/backend-proj/app/services/rate_limiter.py) | Redis Sorted Set sliding-window rate limiter using atomic pipeline transactions. |
-| **Storage Service** | [app/services/storage_service.py](file:///c:/Users/Neel/Downloads/backend-proj/app/services/storage_service.py) | Data export service serializing events and streaming uploads to S3 MinIO buckets. |
-| **Celery Tasks** | [app/workers/tasks.py](file:///c:/Users/Neel/Downloads/backend-proj/app/workers/tasks.py) | Celery tasks for payload enrichment, hourly pre-aggregation upserts, and pruning. |
-| **Celery Orchestrator** | [app/workers/celery_app.py](file:///c:/Users/Neel/Downloads/backend-proj/app/workers/celery_app.py) | Celery worker configuration, RabbitMQ broker DSN, and Celery Beat cron schedule. |
-| **WebSocket Manager** | [app/websocket/manager.py](file:///c:/Users/Neel/Downloads/backend-proj/app/websocket/manager.py) | ConnectionManager managing active WebSocket sockets and multi-tenant rooms. |
-| **Telemetry Setup** | [app/observability/otel.py](file:///c:/Users/Neel/Downloads/backend-proj/app/observability/otel.py) | OpenTelemetry instrumentation for FastAPI, SQLAlchemy, Redis, and Tempo tracing. |
-| **Database Seed Script** | [scripts/seed_data.py](file:///c:/Users/Neel/Downloads/backend-proj/scripts/seed_data.py) | CLI seed script populating default RBAC accounts and sample multi-tenant events. |
-| **Load Testing Script** | [k6/load_test.js](file:///c:/Users/Neel/Downloads/backend-proj/k6/load_test.js) | k6 performance test script benchmarking high-concurrency ingestion endpoints. |
-| **Container Stack** | [docker-compose.yml](file:///c:/Users/Neel/Downloads/backend-proj/docker-compose.yml) | Complete 12-service microservices compose file orchestrating production containers. |
+| **Application Gateway** | [app/main.py](app/main.py) | FastAPI initialization, CORS middleware, OpenTelemetry setup, router registration. |
+| **Configuration Core** | [app/core/config.py](app/core/config.py) | `Pydantic-settings` strict environment variable validation and type casting. |
+| **Database Core** | [app/core/database.py](app/core/database.py) | Async SQLAlchemy 2.0 engine (`create_async_engine`) and `async_sessionmaker`. |
+| **Cache Core** | [app/core/redis.py](app/core/redis.py) | Async Redis connection client factory. |
+| **Storage Core** | [app/core/minio.py](app/core/minio.py) | S3 MinIO storage client setup and automatic bucket creation. |
+| **Security Module** | [app/core/security.py](app/core/security.py) | Bcrypt password hashing (`passlib`) and signed JWT encoding/decoding (`pyjwt`). |
+| **RBAC Security Guard** | [app/core/rbac.py](app/core/rbac.py) | `UserRole` enum (`admin`, `analyst`, `ingest`) and declarative `RoleChecker` dependency. |
+| **Event Model** | [app/db/models/event.py](app/db/models/event.py) | PostgreSQL `Event` model featuring JSONB, `TSVector`, GIN indexes, and partial unique index. |
+| **User Model** | [app/db/models/user.py](app/db/models/user.py) | `User` model with UUID primary keys, unique email, role enums, and timestamps. |
+| **Analytics Model** | [app/db/models/analytics.py](app/db/models/analytics.py) | `HourlyAnalytics` model storing tenant hourly pre-computations with unique constraints. |
+| **Auth Service** | [app/services/auth_service.py](app/services/auth_service.py) | Business logic for registration, authentication, token refresh, and user lookups. |
+| **Event Service** | [app/services/event_service.py](app/services/event_service.py) | Single and batch ingestion service, PostgreSQL TSVector full-text search executor. |
+| **Analytics Service** | [app/services/analytics_service.py](app/services/analytics_service.py) | Analytics service implementing Redis cache-first lookups with fallback DB queries. |
+| **Rate Limiter Service** | [app/services/rate_limiter.py](app/services/rate_limiter.py) | Redis Sorted Set sliding-window rate limiter using atomic pipeline transactions. |
+| **Storage Service** | [app/services/storage_service.py](app/services/storage_service.py) | Data export service serializing events and streaming uploads to S3 MinIO buckets. |
+| **Celery Tasks** | [app/workers/tasks.py](app/workers/tasks.py) | Celery tasks for payload enrichment, hourly pre-aggregation upserts, and pruning. |
+| **Celery Orchestrator** | [app/workers/celery_app.py](app/workers/celery_app.py) | Celery worker configuration, RabbitMQ broker DSN, and Celery Beat cron schedule. |
+| **WebSocket Manager** | [app/websocket/manager.py](app/websocket/manager.py) | ConnectionManager managing active WebSocket sockets and multi-tenant rooms. |
+| **Telemetry Setup** | [app/observability/otel.py](app/observability/otel.py) | OpenTelemetry instrumentation for FastAPI, SQLAlchemy, Redis, and Tempo tracing. |
+| **Database Seed Script** | [scripts/seed_data.py](scripts/seed_data.py) | CLI seed script populating default RBAC accounts and sample multi-tenant events. |
+| **Load Testing Script** | [k6/load_test.js](k6/load_test.js) | k6 performance test script benchmarking high-concurrency ingestion endpoints. |
+| **Container Stack** | [docker-compose.yml](docker-compose.yml) | Complete 12-service microservices compose file orchestrating production containers. |
 
 ---
 
@@ -263,7 +264,7 @@ This section highlights 7 key backend engineering implementations in PulseStream
 
 ### 1. Redis Atomic Sliding-Window Rate Limiting Engine
 
-Traditional fixed-window rate limiters suffer from boundary burst vulnerabilities (allowing twice the limit at window boundaries). PulseStream implements a **true sliding-window rate limiter** in [rate_limiter.py](file:///c:/Users/Neel/Downloads/backend-proj/app/services/rate_limiter.py) using Redis Sorted Sets (`ZADD`, `ZREMRANGEBYSCORE`, `ZCARD`) wrapped inside an atomic Redis pipeline transaction:
+Traditional fixed-window rate limiters suffer from boundary burst vulnerabilities (allowing twice the limit at window boundaries). PulseStream implements a **true sliding-window rate limiter** in [rate_limiter.py](app/services/rate_limiter.py) using Redis Sorted Sets (`ZADD`, `ZREMRANGEBYSCORE`, `ZCARD`) wrapped inside an atomic Redis pipeline transaction:
 
 ```python
 async def check_rate_limit(self, identifier: str) -> None:
@@ -294,7 +295,7 @@ async def check_rate_limit(self, identifier: str) -> None:
 
 ### 2. High-Concurrency Event Ingestion with Idempotency & GIN-Indexed Full-Text Search
 
-In [event_service.py](file:///c:/Users/Neel/Downloads/backend-proj/app/services/event_service.py) and [event.py](file:///c:/Users/Neel/Downloads/backend-proj/app/db/models/event.py), PulseStream supports single and batch event ingestion with strict idempotency guarantees and database-native full-text search:
+In [event_service.py](app/services/event_service.py) and [event.py](app/db/models/event.py), PulseStream supports single and batch event ingestion with strict idempotency guarantees and database-native full-text search:
 
 - **Idempotency Protection**: A PostgreSQL partial unique index (`idx_events_tenant_idempotency`) on `(tenant_id, idempotency_key)` prevents duplicate event ingestion under retry scenarios:
   ```python
@@ -322,7 +323,7 @@ In [event_service.py](file:///c:/Users/Neel/Downloads/backend-proj/app/services/
 
 ### 3. Multi-Tenant WebSocket Connection Manager
 
-In [manager.py](file:///c:/Users/Neel/Downloads/backend-proj/app/websocket/manager.py) and [websocket.py](file:///c:/Users/Neel/Downloads/backend-proj/app/api/v1/websocket.py), PulseStream maintains persistent full-duplex WebSocket connections grouped by tenant ID:
+In [manager.py](app/websocket/manager.py) and [websocket.py](app/api/v1/websocket.py), PulseStream maintains persistent full-duplex WebSocket connections grouped by tenant ID:
 
 ```python
 class ConnectionManager:
@@ -355,7 +356,7 @@ class ConnectionManager:
 
 ### 4. Celery Beat Pre-Aggregated Hourly Analytics & Write-Through Caching
 
-To guarantee sub-millisecond responses on the `/api/v1/analytics` endpoint without running costly aggregate `GROUP BY` queries on live event tables, [Celery Beat](file:///c:/Users/Neel/Downloads/backend-proj/app/workers/celery_app.py) executes a periodic background job ([compute_hourly_analytics_task](file:///c:/Users/Neel/Downloads/backend-proj/app/workers/tasks.py)) every 60 seconds:
+To guarantee sub-millisecond responses on the `/api/v1/analytics` endpoint without running costly aggregate `GROUP BY` queries on live event tables, [Celery Beat](app/workers/celery_app.py) executes a periodic background job ([compute_hourly_analytics_task](app/workers/tasks.py)) every 60 seconds:
 
 ```python
 # Upsert into PostgreSQL HourlyAnalytics using PostgreSQL ON CONFLICT DO UPDATE
@@ -388,13 +389,13 @@ cache_key = f"analytics:hourly:{tenant_id}:24"
 redis_client.set(cache_key, json.dumps(analytics_cache_data), ex=300)
 ```
 
-- **API Layer Response**: [analytics_service.py](file:///c:/Users/Neel/Downloads/backend-proj/app/services/analytics_service.py) reads directly from Redis key `analytics:hourly:{tenant_id}:24`, resulting in **< 1ms response latency**.
+- **API Layer Response**: [analytics_service.py](app/services/analytics_service.py) reads directly from Redis key `analytics:hourly:{tenant_id}:24`, resulting in **< 1ms response latency**.
 
 ---
 
 ### 5. Stateless OAuth2 + JWT Security & Declarative RBAC Guards
 
-PulseStream implements enterprise security in [security.py](file:///c:/Users/Neel/Downloads/backend-proj/app/core/security.py) and [rbac.py](file:///c:/Users/Neel/Downloads/backend-proj/app/core/rbac.py):
+PulseStream implements enterprise security in [security.py](app/core/security.py) and [rbac.py](app/core/rbac.py):
 
 - **Bcrypt Password Hashing**: Utilizes `passlib[bcrypt]` for secure password storage.
 - **Stateless Tokens**: Signs HS256 JWT access (30 min expiry) and refresh tokens (7 day expiry) containing user ID and role scopes.
@@ -417,7 +418,7 @@ PulseStream implements enterprise security in [security.py](file:///c:/Users/Nee
 
 ### 6. Asynchronous S3 Data Export Archival Pipeline
 
-In [storage_service.py](file:///c:/Users/Neel/Downloads/backend-proj/app/services/storage_service.py) and [export.py](file:///c:/Users/Neel/Downloads/backend-proj/app/api/v1/export.py), users with `analyst` or `admin` roles can trigger automated exports of tenant data to MinIO object storage:
+In [storage_service.py](app/services/storage_service.py) and [export.py](app/api/v1/export.py), users with `analyst` or `admin` roles can trigger automated exports of tenant data to MinIO object storage:
 
 ```python
 async def export_tenant_events(
@@ -452,7 +453,7 @@ async def export_tenant_events(
 
 ### 7. Cloud-Native OpenTelemetry Distributed Tracing & APM
 
-In [otel.py](file:///c:/Users/Neel/Downloads/backend-proj/app/observability/otel.py), OpenTelemetry distributed tracing instrumentation captures request lifecycles across FastAPI endpoints, database queries, Redis cache lookups, and Celery worker executions:
+In [otel.py](app/observability/otel.py), OpenTelemetry distributed tracing instrumentation captures request lifecycles across FastAPI endpoints, database queries, Redis cache lookups, and Celery worker executions:
 
 - **Traces**: Exported via OTLP (`http://tempo:4318/v1/traces`) to Grafana Tempo.
 - **Metrics**: Exposed via `/metrics` endpoint to Prometheus.
@@ -721,7 +722,7 @@ This section documents all API endpoints, including HTTP methods, paths, RBAC au
 | **Loki Log Collector** | http://localhost:3100 | 3100 | Log ingestion endpoint |
 | **Tempo Trace Collector** | http://localhost:3200 | 3200 | OTLP HTTP trace endpoint (:4318) |
 
-### Environment Variables Configuration Reference ([.env.example](file:///c:/Users/Neel/Downloads/backend-proj/.env.example))
+### Environment Variables Configuration Reference ([.env.example](.env.example))
 
 ```ini
 PROJECT_NAME=PulseStream
@@ -811,7 +812,7 @@ docker compose ps
 
 ### Step 3: Seed RBAC Users & Initial Event Data
 
-Execute the database seed script ([scripts/seed_data.py](file:///c:/Users/Neel/Downloads/backend-proj/scripts/seed_data.py)) inside the running `app` container to populate initial accounts (`admin@pulsestream.com`, `analyst@pulsestream.com`, `ingest@pulsestream.com`) and sample multi-tenant events:
+Execute the database seed script ([scripts/seed_data.py](scripts/seed_data.py)) inside the running `app` container to populate initial accounts (`admin@pulsestream.com`, `analyst@pulsestream.com`, `ingest@pulsestream.com`) and sample multi-tenant events:
 
 ```bash
 docker compose exec app python scripts/seed_data.py
@@ -903,6 +904,31 @@ curl -X POST "http://localhost:8000/api/v1/export?tenant_id=tenant_alpha&limit=1
 
 ---
 
+#### H. Create Programmatic API Key & Ingest Events via `X-API-Key`
+```bash
+# 1. Create a scoped API Key (Admin/Analyst)
+API_KEY_RESP=$(curl -s -X POST "http://localhost:8000/api/v1/api-keys?tenant_id=tenant_alpha" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{
+    "name": "Production Sensor Ingest Key",
+    "scopes": ["events:write", "events:read", "analytics:read"]
+  }')
+
+RAW_KEY=$(echo $API_KEY_RESP | jq -r .raw_key)
+echo "Generated API Key: $RAW_KEY"
+
+# 2. Ingest an event directly using X-API-Key header without JWT login
+curl -X POST "http://localhost:8000/api/v1/events" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $RAW_KEY" \
+  -d '{
+    "tenant_id": "tenant_alpha",
+    "event_type": "sensor_heartbeat",
+    "payload": {"device_id": "iot_99", "cpu_load": 0.42, "battery": 98}
+  }'
+```
+
 ### Step 5: Automated Testing, Benchmarking & Code Quality Audit
 
 - **Execute Pytest Test Suite**:
@@ -939,7 +965,7 @@ curl -X POST "http://localhost:8000/api/v1/export?tenant_id=tenant_alpha&limit=1
 
 ## Performance Benchmarking & System Capabilities
 
-- **REST Ingestion Throughput**: Verified under high concurrency via [load_test.js](file:///c:/Users/Neel/Downloads/backend-proj/k6/load_test.js) with sub-50ms p95 latency.
+- **REST Ingestion Throughput**: Verified under high concurrency via [load_test.js](k6/load_test.js) with sub-50ms p95 latency.
 - **Analytics Response Time**: Pre-computed Redis cache retrieval yields **< 1ms response latency** on `/api/v1/analytics`.
 - **Search Query Acceleration**: PostgreSQL GIN-indexed `TSVector` search queries complete in **< 5ms** across tens of thousands of event JSONB records.
 - **Rate Limit Evaluation**: Microsecond Redis pipeline execution (`ZADD`, `ZREMRANGEBYSCORE`, `ZCARD`) adds **< 0.5ms overhead** per HTTP request.
@@ -961,6 +987,6 @@ The following enhancements are documented for future platform evolutions:
 
 - **Author**: Aishik Tokdar
 - **Repository**: [https://github.com/AishikTokdar/PulseStream](https://github.com/AishikTokdar/PulseStream)
-- **License**: MIT License - see the [LICENSE](file:///c:/Users/Neel/Downloads/backend-proj/LICENSE) file for complete details.
+- **License**: MIT License - see the [LICENSE](LICENSE) file for complete details.
 
 Copyright (c) 2026 Aishik Tokdar. All rights reserved.
