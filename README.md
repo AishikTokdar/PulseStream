@@ -930,6 +930,37 @@ curl -X POST "http://localhost:8000/api/v1/events" \
   }'
 ```
 
+#### I. Register Event Schema & Test Strict Validation Enforcement
+```bash
+# 1. Register a strict JSON schema for order checkout
+curl -X POST "http://localhost:8000/api/v1/schemas?tenant_id=tenant_alpha" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{
+    "event_type": "order_checkout",
+    "is_strict": true,
+    "description": "Strict schema for order checkout events",
+    "json_schema": {
+      "type": "object",
+      "required": ["order_id", "total_cents"],
+      "properties": {
+        "order_id": {"type": "string"},
+        "total_cents": {"type": "integer", "minimum": 1}
+      }
+    }
+  }'
+
+# 2. Attempt to ingest an invalid payload (missing total_cents) -> Triggers HTTP 422
+curl -i -X POST "http://localhost:8000/api/v1/events" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{
+    "tenant_id": "tenant_alpha",
+    "event_type": "order_checkout",
+    "payload": {"order_id": "ord_bad_01"}
+  }'
+```
+
 ### Step 5: Automated Testing, Benchmarking & Code Quality Audit
 
 - **Execute Pytest Test Suite**:

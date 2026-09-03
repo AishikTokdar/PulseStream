@@ -1,12 +1,15 @@
-import json
 from datetime import datetime, timezone
+import json
 from typing import Any, List, Optional
 import uuid
+from fastapi import HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import String, func, select
+from redis.asyncio import Redis
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models.event import Event
+from app.services.schema_service import SchemaRegistryService
 
 
 class EventCreateSchema(BaseModel):
@@ -35,8 +38,10 @@ class EventBatchResponseSchema(BaseModel):
 
 
 class EventService:
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession, redis_client: Optional[Redis] = None):
         self.db = db
+        self.redis = redis_client
+        self.schema_service = SchemaRegistryService(db, redis_client)
 
     async def ingest_event(self, event_in: EventCreateSchema) -> Event:
         # Check idempotency if key provided
@@ -49,14 +54,34 @@ class EventService:
             if existing:
                 return existing
 
-        payload_text = f"{event_in.event_type} {json.dumps(event_in.payload)}"
+        # Validate against schema registry if registered
+        schema = await self.schema_service.get_latest_schema(
+            tenant_id=event_in.tenant_id, event_type=event_in.event_type
+        )
+        payload = dict(event_in.payload)
+        if schema:
+            is_valid, errors = SchemaRegistryService.validate_payload(payload, schema.json_schema)
+            if not is_valid:
+                if schema.is_strict:
+                    raise HTTPException(
+                        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                        detail={
+                            "message": f"Payload failed schema validation for event type '{event_in.event_type}' (v{schema.version})",
+                            "errors": errors,
+                        },
+                    )
+                else:
+                    payload["_schema_valid"] = False
+                    payload["_validation_errors"] = errors
+
+        payload_text = f"{event_in.event_type} {json.dumps(payload)}"
         event_ts = event_in.timestamp or datetime.now(timezone.utc)
 
         db_event = Event(
             tenant_id=event_in.tenant_id,
             event_type=event_in.event_type,
             idempotency_key=event_in.idempotency_key,
-            payload=event_in.payload,
+            payload=payload,
             timestamp=event_ts,
             search_vector=func.to_tsvector("english", payload_text),
         )
@@ -81,13 +106,28 @@ class EventService:
                     ingested.append(existing)
                     continue
 
-            payload_text = f"{event_in.event_type} {json.dumps(event_in.payload)}"
+            # Check schema validation
+            schema = await self.schema_service.get_latest_schema(
+                tenant_id=event_in.tenant_id, event_type=event_in.event_type
+            )
+            payload = dict(event_in.payload)
+            if schema:
+                is_valid, errors = SchemaRegistryService.validate_payload(payload, schema.json_schema)
+                if not is_valid:
+                    if schema.is_strict:
+                        skipped_count += 1
+                        continue
+                    else:
+                        payload["_schema_valid"] = False
+                        payload["_validation_errors"] = errors
+
+            payload_text = f"{event_in.event_type} {json.dumps(payload)}"
             event_ts = event_in.timestamp or datetime.now(timezone.utc)
             db_event = Event(
                 tenant_id=event_in.tenant_id,
                 event_type=event_in.event_type,
                 idempotency_key=event_in.idempotency_key,
-                payload=event_in.payload,
+                payload=payload,
                 timestamp=event_ts,
                 search_vector=func.to_tsvector("english", payload_text),
             )
@@ -128,8 +168,8 @@ class EventService:
         if query_text:
             formatted_query = func.plainto_tsquery("english", query_text)
             stmt = stmt.where(
-                (Event.search_vector.bool_op("@@")(formatted_query))
-                | (func.to_tsvector("english", Event.payload.cast(String)).bool_op("@@")(formatted_query))
+                (Event.search_vector.op("@@")(formatted_query))
+                | (Event.payload.op("?")(query_text))
             )
 
         stmt = stmt.order_by(Event.timestamp.desc()).limit(limit).offset(offset)
