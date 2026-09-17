@@ -962,6 +962,17 @@ curl -i -X POST "http://localhost:8000/api/v1/events" \
   }'
 ```
 
+#### J. Inspect & Replay Dead Letter Queue (DLQ) Events
+```bash
+# 1. List quarantined failed events
+curl -X GET "http://localhost:8000/api/v1/dlq?tenant_id=tenant_alpha&status=quarantined" \
+  -H "Authorization: Bearer $ANALYST_TOKEN"
+
+# 2. Replay a quarantined event by ID after resolving downstream schemas/workers
+curl -X POST "http://localhost:8000/api/v1/dlq/<DEAD_LETTER_EVENT_ID>/replay?tenant_id=tenant_alpha" \
+  -H "Authorization: Bearer $ANALYST_TOKEN"
+```
+
 ### Step 5: Automated Testing, Benchmarking & Code Quality Audit
 
 - **Execute Pytest Test Suite**:
