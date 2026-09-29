@@ -1,7 +1,11 @@
 import asyncio
 from datetime import datetime, timedelta, timezone
+import hashlib
+import hmac
 import json
-from typing import Any, Dict
+import time
+from typing import Any, Dict, List
+import httpx
 import redis
 from sqlalchemy import create_engine, delete, func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -10,6 +14,7 @@ from sqlalchemy.orm import sessionmaker
 from app.core.config import settings
 from app.db.models.analytics import HourlyAnalytics
 from app.db.models.event import Event
+from app.db.models.webhook import WebhookDeliveryLog, WebhookSubscription
 from app.workers.celery_app import celery_app
 
 # Synchronous DB engine for Celery tasks
@@ -135,16 +140,110 @@ def enrich_and_process_event_task(event_id: str) -> Dict[str, Any]:
         if not event:
             return {"status": "not_found", "event_id": event_id}
 
-        # Simulating enrichment metadata addition
-        payload = dict(event.payload)
-        payload["_enriched"] = True
-        payload["_processed_at"] = datetime.now(timezone.utc).isoformat()
+        # PII Sanitization & Enrichment
+        from app.services.pii_service import PIIRedactionService
+        sanitized_payload, redacted_count = PIIRedactionService.redact_payload(dict(event.payload))
+        sanitized_payload["_enriched"] = True
+        sanitized_payload["_processed_at"] = datetime.now(timezone.utc).isoformat()
+        if redacted_count > 0:
+            sanitized_payload["_pii_sanitized"] = True
+            sanitized_payload["_pii_fields_masked"] = redacted_count
 
-        event.payload = payload
+        event.payload = sanitized_payload
         session.commit()
-        return {"status": "success", "event_id": event_id, "tenant_id": event.tenant_id}
+        return {
+            "status": "success",
+            "event_id": event_id,
+            "tenant_id": event.tenant_id,
+            "pii_fields_masked": redacted_count,
+        }
     except Exception as e:
         session.rollback()
+        return {"status": "error", "message": str(e)}
+    finally:
+        session.close()
+
+
+@celery_app.task(name="app.workers.tasks.dispatch_webhook_event_task")
+def dispatch_webhook_event_task(
+    event_id: str, tenant_id: str, event_type: str, payload: Dict[str, Any]
+) -> Dict[str, Any]:
+    """Dispatches webhook payloads to subscribed external URLs with HMAC signatures."""
+    session = SyncSessionLocal()
+    try:
+        stmt = select(WebhookSubscription).where(
+            WebhookSubscription.tenant_id == tenant_id,
+            WebhookSubscription.is_active.is_(True),
+        )
+        subs = session.execute(stmt).scalars().all()
+
+        # Filter matching subscriptions
+        matched_subs = [
+            s for s in subs if "*" in s.event_types or event_type in s.event_types
+        ]
+        if not matched_subs:
+            return {"status": "skipped", "reason": "no_matching_subscriptions"}
+
+        dispatched_count = 0
+        now_iso = datetime.now(timezone.utc).isoformat()
+        body_dict = {
+            "event_id": event_id,
+            "tenant_id": tenant_id,
+            "event_type": event_type,
+            "payload": payload,
+            "timestamp": now_iso,
+        }
+        body_bytes = json.dumps(body_dict, default=str).encode("utf-8")
+
+        with httpx.Client(timeout=10.0) as client:
+            for sub in matched_subs:
+                signature = hmac.new(
+                    sub.secret_key.encode("utf-8"), body_bytes, hashlib.sha256
+                ).hexdigest()
+
+                headers = {
+                    "Content-Type": "application/json",
+                    "X-PulseStream-Signature": f"sha256={signature}",
+                    "X-PulseStream-Event": event_type,
+                    "X-PulseStream-Delivery": event_id,
+                }
+
+                start_time = time.perf_counter()
+                delivery_status = "failed"
+                status_code = None
+                error_msg = None
+
+                try:
+                    resp = client.post(sub.target_url, content=body_bytes, headers=headers)
+                    duration_ms = round((time.perf_counter() - start_time) * 1000, 2)
+                    status_code = resp.status_code
+                    if 200 <= resp.status_code < 300:
+                        delivery_status = "delivered"
+                    else:
+                        error_msg = f"HTTP {resp.status_code}: {resp.text[:200]}"
+                except Exception as exc:
+                    duration_ms = round((time.perf_counter() - start_time) * 1000, 2)
+                    error_msg = str(exc)[:200]
+
+                log_entry = WebhookDeliveryLog(
+                    subscription_id=sub.id,
+                    tenant_id=tenant_id,
+                    event_id=event_id,
+                    event_type=event_type,
+                    status_code=status_code,
+                    delivery_status=delivery_status,
+                    duration_ms=duration_ms,
+                    attempt=1,
+                    error_message=error_msg,
+                )
+                session.add(log_entry)
+                dispatched_count += 1
+
+        session.commit()
+        return {"status": "success", "dispatched_webhooks": dispatched_count}
+    except Exception as e:
+        session.rollback()
+        print(f"Error dispatching webhooks: {e}")
         return {"status": "error", "message": str(e)}
     finally:
         session.close()

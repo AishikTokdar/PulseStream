@@ -974,6 +974,23 @@ curl -X POST "http://localhost:8000/api/v1/dlq/<DEAD_LETTER_EVENT_ID>/replay?ten
   -H "Authorization: Bearer $ANALYST_TOKEN"
 ```
 
+#### K. Register Outbound Webhook & Inspect Delivery Logs
+```bash
+# 1. Register an outbound webhook receiver
+curl -X POST "http://localhost:8000/api/v1/webhooks?tenant_id=tenant_alpha" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $ANALYST_TOKEN" \
+  -d '{
+    "target_url": "https://webhook.site/your-unique-url",
+    "event_types": ["checkout_completed", "user_signup"],
+    "description": "External billing integration webhook"
+  }'
+
+# 2. Inspect delivery attempt logs and HMAC latency
+curl -X GET "http://localhost:8000/api/v1/webhooks/<WEBHOOK_SUBSCRIPTION_ID>/logs?tenant_id=tenant_alpha" \
+  -H "Authorization: Bearer $ANALYST_TOKEN"
+```
+
 ### Step 5: Automated Testing, Benchmarking & Code Quality Audit
 
 - **Execute Pytest Test Suite**:
