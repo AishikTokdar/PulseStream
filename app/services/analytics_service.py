@@ -1,12 +1,13 @@
+from datetime import datetime, timedelta, timezone
 import json
-from datetime import datetime
 from typing import Any, List, Optional
 from pydantic import BaseModel, ConfigDict
 from redis.asyncio import Redis
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models.analytics import HourlyAnalytics
+from app.db.models.event import Event
 
 
 class HourlyAnalyticsResponseSchema(BaseModel):
@@ -23,6 +24,20 @@ class AnalyticsSummaryResponseSchema(BaseModel):
     total_events: int
     overall_avg_payload_size: float
     hourly_aggregates: List[HourlyAnalyticsResponseSchema]
+    cached: bool = False
+
+
+class BreakdownItemSchema(BaseModel):
+    key: str
+    count: int
+    percentage: float
+
+
+class AnalyticsBreakdownResponseSchema(BaseModel):
+    tenant_id: str
+    field_path: str
+    total_events: int
+    breakdown: List[BreakdownItemSchema]
     cached: bool = False
 
 
@@ -93,10 +108,76 @@ class AnalyticsService:
         # Cache in Redis with 300 seconds TTL
         if self.redis:
             try:
-                # Convert datetimes to isoformat string for json serialization
                 cache_dict = summary.model_dump(mode="json")
                 await self.redis.set(cache_key, json.dumps(cache_dict), ex=300)
             except Exception as e:
                 print(f"Redis cache set error: {e}")
+
+        return summary
+
+    async def get_payload_breakdown(
+        self,
+        tenant_id: str,
+        field_path: str,
+        event_type: Optional[str] = None,
+        hours: int = 24,
+    ) -> AnalyticsBreakdownResponseSchema:
+        clean_event_type = event_type or "all"
+        cache_key = f"analytics:breakdown:{tenant_id}:{field_path}:{clean_event_type}:{hours}"
+
+        if self.redis:
+            try:
+                cached = await self.redis.get(cache_key)
+                if cached:
+                    parsed = json.loads(cached)
+                    parsed["cached"] = True
+                    return AnalyticsBreakdownResponseSchema(**parsed)
+            except Exception as e:
+                print(f"Redis breakdown cache read warning: {e}")
+
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+
+        # JSONB extraction query
+        field_expr = Event.payload[field_path].astext.label("field_val")
+        stmt = (
+            select(field_expr, func.count(Event.id).label("val_count"))
+            .where(
+                Event.tenant_id == tenant_id,
+                Event.timestamp >= cutoff,
+                Event.payload.has_key(field_path),
+            )
+        )
+        if event_type:
+            stmt = stmt.where(Event.event_type == event_type)
+
+        stmt = stmt.group_by(field_expr).order_by(func.count(Event.id).desc()).limit(20)
+
+        result = await self.db.execute(stmt)
+        rows = result.all()
+
+        total_in_breakdown = sum(row[1] for row in rows)
+        items = [
+            BreakdownItemSchema(
+                key=str(row[0]) if row[0] is not None else "null",
+                count=row[1],
+                percentage=round((row[1] / total_in_breakdown * 100), 2) if total_in_breakdown > 0 else 0.0,
+            )
+            for row in rows
+        ]
+
+        summary = AnalyticsBreakdownResponseSchema(
+            tenant_id=tenant_id,
+            field_path=field_path,
+            total_events=total_in_breakdown,
+            breakdown=items,
+            cached=False,
+        )
+
+        if self.redis:
+            try:
+                dump = summary.model_dump(mode="json")
+                await self.redis.set(cache_key, json.dumps(dump), ex=180)
+            except Exception as e:
+                print(f"Redis breakdown cache set warning: {e}")
 
         return summary

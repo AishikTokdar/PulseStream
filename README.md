@@ -21,6 +21,7 @@ For the full architectural specification, subsystem maintenance manual, and futu
 - **Dead Letter Queue (DLQ) & Quarantine Replay Engine**: Quarantines malformed or rejected event payloads in [dlq_service.py](app/services/dlq_service.py) with full failure metadata and retry tracking.
 - **Asynchronous Outbound Webhooks with HMAC-SHA256 Signing**: Integrated an event-driven webhook dispatcher in [tasks.py](app/workers/tasks.py) and [webhook_service.py](app/services/webhook_service.py) signing HTTP POST delivery requests with cryptographic HMAC digests (`X-PulseStream-Signature`) and tracking delivery latencies.
 - **Automated PII Masking & Payload Sanitization**: Embedded automated PII pattern detection (credit cards, SSNs, phone numbers, tokens) in [pii_service.py](app/services/pii_service.py) executing in worker enrichment tasks prior to database persistence and MinIO archival.
+- **Dynamic Breakdown Analytics Endpoint**: Engineered JSONB attribute aggregation in [analytics_service.py](app/services/analytics_service.py) and [analytics.py](app/api/v1/analytics.py) calculating real-time distributions over arbitrary nested payload attributes (`GET /api/v1/analytics/breakdown`).
 - **Stateless OAuth2 + JWT Security & Declarative RBAC: Implemented OAuth2 Password Flow authentication with bcrypt password hashing in [security.py](app/core/security.py) and declarative Role-Based Access Control (`admin`, `analyst`, `ingest`) permission guards in [rbac.py](app/core/rbac.py).
 - **Production Enterprise Observability Stack**: Containerized 12-microservice environment in [docker-compose.yml](docker-compose.yml) featuring OpenTelemetry distributed tracing (Tempo), Prometheus metrics exposition (`/metrics`), Loki log aggregation, Nginx reverse proxying, and pre-configured Grafana dashboards.
 
@@ -989,6 +990,13 @@ curl -X POST "http://localhost:8000/api/v1/webhooks?tenant_id=tenant_alpha" \
 
 # 2. Inspect delivery attempt logs and HMAC latency
 curl -X GET "http://localhost:8000/api/v1/webhooks/<WEBHOOK_SUBSCRIPTION_ID>/logs?tenant_id=tenant_alpha" \
+  -H "Authorization: Bearer $ANALYST_TOKEN"
+```
+
+#### L. Query Dynamic JSONB Breakdown Analytics
+```bash
+# Aggregate real-time distributions by arbitrary nested JSONB payload keys
+curl -X GET "http://localhost:8000/api/v1/analytics/breakdown?tenant_id=tenant_alpha&field=country&hours=24" \
   -H "Authorization: Bearer $ANALYST_TOKEN"
 ```
 
