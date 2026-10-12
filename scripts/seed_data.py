@@ -1,14 +1,19 @@
 import asyncio
 from datetime import datetime, timedelta, timezone
+import hashlib
 import json
+import secrets
 import uuid
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import AsyncSessionLocal, engine
 from app.core.security import get_password_hash
+from app.db.models.api_key import ApiKey
 from app.db.models.event import Event
+from app.db.models.schema import EventSchema
 from app.db.models.user import User
+from app.db.models.webhook import WebhookSubscription
 
 
 async def seed_data() -> None:
@@ -96,6 +101,68 @@ async def seed_data() -> None:
                 )
                 session.add(event)
                 print(f"Created sample event: {ev_data['event_type']} for {ev_data['tenant_id']}")
+
+        # 3. Seed Sample API Keys
+        sample_raw_key = "ps_live_alpha_ingest_key_seed_001"
+        hashed_sample_key = hashlib.sha256(sample_raw_key.encode("utf-8")).hexdigest()
+        stmt_key = select(ApiKey).where(ApiKey.hashed_key == hashed_sample_key)
+        existing_key = (await session.execute(stmt_key)).scalar_one_or_none()
+        if not existing_key:
+            seeded_api_key = ApiKey(
+                tenant_id="tenant_alpha",
+                name="Alpha Production Ingest Key",
+                key_prefix=sample_raw_key[:16],
+                hashed_key=hashed_sample_key,
+                scopes=["events:write", "events:read", "analytics:read"],
+                is_active=True,
+            )
+            session.add(seeded_api_key)
+            print(f"Created seeded API Key for tenant_alpha: {sample_raw_key}")
+
+        # 4. Seed Sample Event Schema
+        schema_def = {
+            "type": "object",
+            "required": ["cart_id", "amount", "currency"],
+            "properties": {
+                "cart_id": {"type": "string"},
+                "amount": {"type": "number", "minimum": 0},
+                "currency": {"type": "string", "minLength": 3, "maxLength": 3},
+            },
+        }
+        stmt_schema = select(EventSchema).where(
+            EventSchema.tenant_id == "tenant_alpha",
+            EventSchema.event_type == "checkout_completed",
+        )
+        existing_schema = (await session.execute(stmt_schema)).scalar_one_or_none()
+        if not existing_schema:
+            sample_schema = EventSchema(
+                tenant_id="tenant_alpha",
+                event_type="checkout_completed",
+                version=1,
+                json_schema=schema_def,
+                is_strict=True,
+                description="Strict schema validation for e-commerce checkout events",
+            )
+            session.add(sample_schema)
+            print("Created seeded EventSchema for checkout_completed")
+
+        # 5. Seed Sample Webhook Subscription
+        stmt_hook = select(WebhookSubscription).where(
+            WebhookSubscription.tenant_id == "tenant_alpha",
+            WebhookSubscription.target_url == "https://webhook.site/pulsestream-test",
+        )
+        existing_hook = (await session.execute(stmt_hook)).scalar_one_or_none()
+        if not existing_hook:
+            sample_webhook = WebhookSubscription(
+                tenant_id="tenant_alpha",
+                target_url="https://webhook.site/pulsestream-test",
+                secret_key=secrets.token_hex(32),
+                event_types=["user_signup", "checkout_completed"],
+                is_active=True,
+                description="Sample external webhook receiver",
+            )
+            session.add(sample_webhook)
+            print("Created seeded WebhookSubscription for tenant_alpha")
 
         await session.commit()
         print("Data seeding completed successfully.")

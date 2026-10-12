@@ -769,21 +769,21 @@ RATE_LIMIT_WINDOW_SECONDS=60
 
 ## Installation, Execution, and Verification Guide
 
-This section provides step-by-step commands to clone, configure, launch, seed, test, and shutdown the complete PulseStream backend stack on **Windows** (PowerShell / CMD) and **Linux / macOS**.
+This section provides complete instructions to configure, run, and test PulseStream locally using either **Docker Compose (Full 12-Service Stack)** or **Normal / Native Python Local Execution**.
 
 ---
 
-### Step 1: Prerequisites & Environment Setup
+### Option A: Testing Locally via Docker Compose (Recommended)
 
-Verify Docker Desktop is running, then clone the repository and configure `.env`:
+Docker Compose automatically spins up the entire production topology: FastAPI, PostgreSQL, Redis, RabbitMQ, MinIO, Nginx, Prometheus, Grafana, Loki, Tempo, Celery Worker, and Celery Beat.
 
-- **Linux / macOS (Bash / Zsh)**:
+#### 1. Clone & Configure Environment
+- **Linux / macOS**:
   ```bash
   git clone https://github.com/AishikTokdar/PulseStream.git
   cd PulseStream
   cp .env.example .env
   ```
-
 - **Windows (PowerShell)**:
   ```powershell
   git clone https://github.com/AishikTokdar/PulseStream.git
@@ -791,41 +791,137 @@ Verify Docker Desktop is running, then clone the repository and configure `.env`
   Copy-Item .env.example .env
   ```
 
-- **Windows (Command Prompt / CMD)**:
-  ```cmd
-  git clone https://github.com/AishikTokdar/PulseStream.git
-  cd PulseStream
-  copy .env.example .env
-  ```
-
----
-
-### Step 2: Build & Launch Containerized Microservices Stack
-
-Launch all 12 containerized services (Nginx, FastAPI, Postgres, Redis, RabbitMQ, MinIO, Prometheus, Grafana, Loki, Tempo, Celery Worker, Celery Beat) in detached background mode:
-
+#### 2. Launch the 12-Microservices Stack
 ```bash
 docker compose up --build -d
 ```
-
-Verify service execution status:
+Verify running containers:
 ```bash
 docker compose ps
 ```
 
----
-
-### Step 3: Seed RBAC Users & Initial Event Data
-
-Execute the database seed script ([scripts/seed_data.py](scripts/seed_data.py)) inside the running `app` container to populate initial accounts (`admin@pulsestream.com`, `analyst@pulsestream.com`, `ingest@pulsestream.com`) and sample multi-tenant events:
-
+#### 3. Apply Migrations & Seed Sample Data
+The `app` container executes migrations automatically on startup via `RUN_MIGRATIONS=true`. To re-run migrations or populate test data:
 ```bash
+# Run latest database migrations
+docker compose exec app alembic upgrade head
+
+# Seed initial RBAC users, API keys, schemas, and events
 docker compose exec app python scripts/seed_data.py
+```
+
+#### 4. Run Automated Test Suite via Docker
+Execute the Pytest test suite inside the container environment:
+```bash
+docker compose exec app pytest -v
+```
+
+#### 5. Run High-Concurrency Load Test
+```bash
+k6 run k6/load_test.js
 ```
 
 ---
 
+### Option B: Testing Locally Normal / Native (Without Docker)
+
+You can run PulseStream directly on your host machine using Python 3.11+.
+
+#### 1. Prerequisites
+Ensure you have access to local or containerized instances of the supporting services:
+- **Python**: `>= 3.11`
+- **PostgreSQL**: `16` (listening on port 5432)
+- **Redis**: `7` (listening on port 6379)
+- **RabbitMQ**: `3.x` (listening on port 5672)
+- **MinIO**: S3 compatible (listening on port 9000)
+
+> [!TIP]
+> If you only want to run backing services in Docker while running the Python app natively, run:
+> ```bash
+> docker compose up -d postgres redis rabbitmq minio
+> ```
+
+#### 2. Create Virtual Environment & Install Dependencies
+- **Linux / macOS**:
+  ```bash
+  python3 -m venv .venv
+  source .venv/bin/activate
+  pip install --upgrade pip
+  pip install -e ".[dev]"
+  ```
+- **Windows (PowerShell)**:
+  ```powershell
+  python -m venv .venv
+  .\.venv\Scripts\Activate.ps1
+  python -m pip install --upgrade pip
+  pip install -e ".[dev]"
+  ```
+
+#### 3. Configure Local `.env`
+Copy `.env.example` to `.env` and set the server hosts to `localhost`:
+```ini
+POSTGRES_SERVER=localhost
+POSTGRES_PORT=5432
+POSTGRES_DB=pulsestream_db
+POSTGRES_USER=pulsestream_user
+POSTGRES_PASSWORD=pulsestream_password
+
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_URL=redis://localhost:6379/0
+
+RABBITMQ_HOST=localhost
+RABBITMQ_PORT=5672
+CELERY_BROKER_URL=amqp://guest:guest@localhost:5672//
+CELERY_RESULT_BACKEND=redis://localhost:6379/1
+
+MINIO_ENDPOINT=localhost:9000
+MINIO_ACCESS_KEY=minioadmin
+MINIO_SECRET_KEY=minioadmin
+MINIO_BUCKET_NAME=pulsestream-exports
+```
+
+#### 4. Run Migrations & Seed Data Locally
+```bash
+# Apply database schema revisions (0001 and 0002)
+alembic upgrade head
+
+# Seed default test users, API keys, schemas, and events
+python scripts/seed_data.py
+```
+
+#### 5. Execute Pytest Test Suite Locally
+```bash
+# Run all unit and integration tests with verbose output
+pytest -v
+
+# Run with test coverage report
+pytest --cov=app --cov-report=term-missing
+```
+
+#### 6. Start Local Application Services
+Launch each component in separate terminal windows:
+
+- **Terminal 1 — FastAPI Application Server**:
+  ```bash
+  uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+  ```
+  Open interactive Swagger UI at [http://localhost:8000/docs](http://localhost:8000/docs).
+
+- **Terminal 2 — Celery Background Enrichment & Webhook Worker**:
+  ```bash
+  celery -A app.workers.celery_app worker --loglevel=info -c 4
+  ```
+
+- **Terminal 3 — Celery Beat Cron Scheduler**:
+  ```bash
+  celery -A app.workers.celery_app beat --loglevel=info
+  ```
+
+---
+
 ### Step 4: Step-by-Step API Execution Walkthrough
+
 
 #### A. Verify Infrastructure Readiness Probe
 ```bash

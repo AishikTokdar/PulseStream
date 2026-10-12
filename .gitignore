@@ -59,3 +59,9 @@ Thumbs.db
 
 # Alembic
 alembic.ini.bak
+
+# Repositories & Temporary Git directories
+.git_repo/
+.gitrepo/
+.git_old/
+.git_test/
