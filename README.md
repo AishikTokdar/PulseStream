@@ -1100,7 +1100,11 @@ curl -X GET "http://localhost:8000/api/v1/analytics/breakdown?tenant_id=tenant_a
 
 - **Execute Pytest Test Suite**:
   ```bash
-  docker compose exec app pytest
+  # Inside Docker container
+  docker compose exec app pytest -v --cov=app
+
+  # Or natively on host machine
+  pytest -v --cov=app --cov-report=term-missing
   ```
 
 - **Execute k6 High-Concurrency Ingestion Load Test**:
