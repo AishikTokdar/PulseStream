@@ -16,14 +16,15 @@ For the full architectural specification, subsystem maintenance manual, and futu
 - **Event-Driven Asynchronous Task Processing**: Decoupled heavy background tasks (payload enrichment and retention data cleanup) from core HTTP handlers using RabbitMQ AMQP message broker and Celery worker pools in [tasks.py](app/workers/tasks.py).
 - **Pre-Aggregated Hourly Analytics & Write-Through Caching**: Configured a Celery Beat cron scheduler executing periodic 60-second analytics pre-computations with PostgreSQL `ON CONFLICT DO UPDATE` upserts and write-through caching in Redis (`analytics:hourly:{tenant_id}:24`), serving **sub-millisecond (< 1ms)** responses on [/api/v1/analytics](app/api/v1/analytics.py).
 - **S3 Object Storage Data Archival Pipeline**: Integrated S3-compatible MinIO client in [storage_service.py](app/services/storage_service.py) and [export.py](app/api/v1/export.py) for generating and archiving tenant JSON event payloads asynchronously to MinIO object storage buckets (`pulsestream-exports`).
+- **Stateless OAuth2 + JWT Security & Declarative RBAC**: Implemented OAuth2 Password Flow authentication with bcrypt password hashing in [security.py](app/core/security.py) and declarative Role-Based Access Control (`admin`, `analyst`, `ingest`) permission guards in [rbac.py](app/core/rbac.py).
 - **Programmatic Scoped API Key Authentication (`X-API-Key`)**: Built SHA-256 hashed API key management in [api_key_service.py](app/services/api_key_service.py) and [api_keys.py](app/api/v1/api_keys.py) with sub-millisecond Redis caching and fine-grained scope authorization (`events:write`, `analytics:read`, `export:create`).
 - **Dynamic Event Schema Registry & Strict Validation**: Added versioned tenant schema enforcement in [schema_service.py](app/services/schema_service.py) and [schemas.py](app/api/v1/schemas.py) supporting strict rejection (HTTP 422) and loose quarantine modes.
-- **Dead Letter Queue (DLQ) & Quarantine Replay Engine**: Quarantines malformed or rejected event payloads in [dlq_service.py](app/services/dlq_service.py) with full failure metadata and retry tracking.
+- **Dead Letter Queue (DLQ) & Quarantine Replay Engine**: Quarantines malformed or rejected event payloads in [dlq_service.py](app/services/dlq_service.py) and provides management APIs (`/api/v1/dlq`) for inspecting failures and executing automated single/batch replays.
 - **Asynchronous Outbound Webhooks with HMAC-SHA256 Signing**: Integrated an event-driven webhook dispatcher in [tasks.py](app/workers/tasks.py) and [webhook_service.py](app/services/webhook_service.py) signing HTTP POST delivery requests with cryptographic HMAC digests (`X-PulseStream-Signature`) and tracking delivery latencies.
 - **Automated PII Masking & Payload Sanitization**: Embedded automated PII pattern detection (credit cards, SSNs, phone numbers, tokens) in [pii_service.py](app/services/pii_service.py) executing in worker enrichment tasks prior to database persistence and MinIO archival.
 - **Dynamic Breakdown Analytics Endpoint**: Engineered JSONB attribute aggregation in [analytics_service.py](app/services/analytics_service.py) and [analytics.py](app/api/v1/analytics.py) calculating real-time distributions over arbitrary nested payload attributes (`GET /api/v1/analytics/breakdown`).
-- **Stateless OAuth2 + JWT Security & Declarative RBAC: Implemented OAuth2 Password Flow authentication with bcrypt password hashing in [security.py](app/core/security.py) and declarative Role-Based Access Control (`admin`, `analyst`, `ingest`) permission guards in [rbac.py](app/core/rbac.py).
 - **Production Enterprise Observability Stack**: Containerized 12-microservice environment in [docker-compose.yml](docker-compose.yml) featuring OpenTelemetry distributed tracing (Tempo), Prometheus metrics exposition (`/metrics`), Loki log aggregation, Nginx reverse proxying, and pre-configured Grafana dashboards.
+
 
 ---
 
@@ -1003,8 +1004,6 @@ curl -X POST "http://localhost:8000/api/v1/export?tenant_id=tenant_alpha&limit=1
   -H "Authorization: Bearer $ANALYST_TOKEN"
 ```
 
----
-
 #### H. Create Programmatic API Key & Ingest Events via `X-API-Key`
 ```bash
 # 1. Create a scoped API Key (Admin/Analyst)
@@ -1096,15 +1095,14 @@ curl -X GET "http://localhost:8000/api/v1/analytics/breakdown?tenant_id=tenant_a
   -H "Authorization: Bearer $ANALYST_TOKEN"
 ```
 
+
+---
+
 ### Step 5: Automated Testing, Benchmarking & Code Quality Audit
 
 - **Execute Pytest Test Suite**:
   ```bash
-  # Inside Docker container
-  docker compose exec app pytest -v --cov=app
-
-  # Or natively on host machine
-  pytest -v --cov=app --cov-report=term-missing
+  docker compose exec app pytest
   ```
 
 - **Execute k6 High-Concurrency Ingestion Load Test**:
