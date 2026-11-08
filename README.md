@@ -30,39 +30,20 @@ For the full architectural specification, subsystem maintenance manual, and futu
 
 ## Architecture Diagram & End-to-End Backend Data Flow
 
-```mermaid
-flowchart TB
-    Client[Clients / SDKs / Load Generators] -->|HTTP / WebSocket| Nginx[Nginx Reverse Proxy :8000]
-    
-    subgraph AppServer["FastAPI Application Gateway"]
-        Nginx --> REST[FastAPI REST Engine]
-        Nginx --> WS[FastAPI WebSocket Handler]
-        REST --> RateLimiter[Redis Sliding Window Rate Limiter]
-        REST --> Auth[JWT & OAuth2 RBAC Engine]
-    end
+### 1. Production Platform Architecture
+![PulseStream System Architecture](assets/System_Architecture.png)
 
-    subgraph DataStorage["Data & Caching Layer"]
-        REST --> DB[(PostgreSQL 16\nTSVector FTS & GIN Indexes)]
-        REST --> Redis[(Redis 7\nHot Metrics & Session Cache)]
-        REST --> MinIO[(MinIO S3\nPayload Archives & Exports)]
-    end
+### 2. Event Ingestion & Processing Pipeline Lifecycle
+![PulseStream Pipeline Architecture](assets/Pipeline_Architecture.png)
 
-    subgraph AsyncPipeline["Asynchronous Worker Pipeline"]
-        REST -->|Task Dispatch| RabbitMQ[[RabbitMQ AMQP Broker]]
-        CeleryWorker[Celery Background Workers] -->|Consume Tasks| RabbitMQ
-        CeleryWorker --> DB
-        CeleryBeat[Celery Beat Cron Scheduler] -->|Hourly Cron Job| CeleryWorker
-        CeleryBeat -->|Push Aggregates| Redis
-    end
+### 3. Dual Authentication & Granular RBAC Scope Resolution
+![PulseStream Dual Auth & RBAC Architecture](assets/DualAuth&RBAC_Architecture.png)
 
-    subgraph Observability["Observability Pipeline"]
-        REST -.->|OTLP Traces :4318| Tempo[Grafana Tempo :3200]
-        REST -.->|Prometheus Metrics /metrics| Prometheus[Prometheus :9090]
-        Prometheus --> Grafana[Grafana Dashboards :3000]
-        Loki[Grafana Loki :3100] --> Grafana
-        Tempo --> Grafana
-    end
-```
+### 4. Dead Letter Queue (DLQ) & Quarantine Replay Engine
+![PulseStream DLQ Lifecycle Architecture](assets/DLQLifecycle_Architecture.png)
+
+### 5. Outbound Webhook Delivery & Cryptographic Signing Mesh
+![PulseStream Webhook Dispatch Architecture](assets/WebhookDispatch_Architecture.png)
 
 ### End-to-End Ingestion Request Lifecycle
 

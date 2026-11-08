@@ -44,6 +44,12 @@ This project report serves as the authoritative architectural specification and 
 
 ## 2. Architecture and Subsystem Specifications
 
+### 2.0 System Architecture Overview
+![PulseStream System Architecture](assets/System_Architecture.png)
+
+### 2.0.1 Event Ingestion & Processing Pipeline Lifecycle
+![PulseStream Pipeline Architecture](assets/Pipeline_Architecture.png)
+
 ### 2.1 API Gateway and Reverse Proxy Subsystem
 - **Component**: Nginx (`nginx/nginx.conf`)
 - **Function**: Entry point listening on port 8000. Proxies requests to FastAPI application instances, manages client header forwarding, and handles HTTP-to-WebSocket connection upgrades.
@@ -56,6 +62,8 @@ This project report serves as the authoritative architectural specification and 
 - **Components**: `app/core/security.py`, `app/core/rbac.py`, `app/services/api_key_service.py`, `app/api/v1/api_keys.py`
 - **Function**: Issues signed HS256 JWT tokens, hashes programmatic API keys via SHA-256, verifies `X-API-Key` headers, and enforces `RoleChecker` and scope permissions.
 
+![PulseStream Dual Auth & RBAC Architecture](assets/DualAuth&RBAC_Architecture.png)
+
 ### 2.4 Event Schema Registry Subsystem
 - **Components**: `app/db/models/schema.py`, `app/services/schema_service.py`, `app/api/v1/schemas.py`
 - **Function**: Stores versioned JSON schema definitions per tenant, caches active schemas in Redis, and validates incoming event payloads before database write.
@@ -64,9 +72,13 @@ This project report serves as the authoritative architectural specification and 
 - **Components**: `app/db/models/dlq.py`, `app/services/dlq_service.py`, `app/api/v1/dlq.py`
 - **Function**: Quarantines unprocessable or schema-rejected events, provides management APIs for inspection, and enables single/batch replay.
 
+![PulseStream DLQ & Quarantine Replay Architecture](assets/DLQLifecycle_Architecture.png)
+
 ### 2.6 Outbound Webhook Subsystem
 - **Components**: `app/db/models/webhook.py`, `app/services/webhook_service.py`, `app/api/v1/webhooks.py`, `app/workers/tasks.py`
 - **Function**: Dispatches event payloads asynchronously to subscribed target URLs, signs requests using HMAC-SHA256, and records delivery logs and latency.
+
+![PulseStream Outbound Webhook Architecture](assets/WebhookDispatch_Architecture.png)
 
 ### 2.7 Data Persistence and Search Subsystem
 - **Components**: PostgreSQL 16, SQLAlchemy 2.0, Alembic (`app/db/models/`, `alembic/`)
