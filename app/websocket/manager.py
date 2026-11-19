@@ -32,21 +32,26 @@ class ConnectionManager:
         await websocket.send_text(json.dumps(message))
 
     async def broadcast_to_tenant(self, tenant_id: str, message: dict) -> None:
+        tenant_conns = self.active_connections.get(tenant_id)
+        if not tenant_conns and not self.global_connections:
+            return  # Fast path: Zero active listeners, bypass JSON serialization entirely
+
         payload_str = json.dumps(message)
         # Send to tenant subscribers
-        if tenant_id in self.active_connections:
-            for connection in list(self.active_connections[tenant_id]):
+        if tenant_conns:
+            for connection in list(tenant_conns):
                 try:
                     await connection.send_text(payload_str)
                 except Exception:
                     self.disconnect(connection, tenant_id)
 
         # Send to global subscribers
-        for connection in list(self.global_connections):
-            try:
-                await connection.send_text(payload_str)
-            except Exception:
-                self.disconnect(connection, "global")
+        if self.global_connections:
+            for connection in list(self.global_connections):
+                try:
+                    await connection.send_text(payload_str)
+                except Exception:
+                    self.disconnect(connection, "global")
 
 
 ws_manager = ConnectionManager()

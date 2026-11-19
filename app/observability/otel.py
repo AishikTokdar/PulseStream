@@ -1,13 +1,4 @@
 from fastapi import FastAPI
-from opentelemetry import trace
-from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
-from opentelemetry.instrumentation.celery import CeleryInstrumentor
-from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-from opentelemetry.instrumentation.redis import RedisInstrumentor
-from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
-from opentelemetry.sdk.resources import SERVICE_NAME, Resource
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from prometheus_client import make_asgi_app
 
 from app.core.config import settings
@@ -15,6 +6,16 @@ from app.core.config import settings
 
 def setup_observability(app: FastAPI) -> None:
     try:
+        from opentelemetry import trace
+        from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+        from opentelemetry.instrumentation.celery import CeleryInstrumentor
+        from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+        from opentelemetry.instrumentation.redis import RedisInstrumentor
+        from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
+        from opentelemetry.sdk.resources import SERVICE_NAME, Resource
+        from opentelemetry.sdk.trace import TracerProvider
+        from opentelemetry.sdk.trace.export import BatchSpanProcessor
+
         resource = Resource(attributes={SERVICE_NAME: settings.OTEL_SERVICE_NAME})
         provider = TracerProvider(resource=resource)
 
@@ -45,3 +46,4 @@ def setup_observability(app: FastAPI) -> None:
         app.mount("/metrics", metrics_app)
     except Exception as e:
         print(f"Prometheus metrics endpoint warning: {e}")
+

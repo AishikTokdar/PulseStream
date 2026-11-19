@@ -80,8 +80,11 @@ class SchemaRegistryService:
         if self.redis:
             try:
                 cached = await self.redis.get(cache_key)
-                if cached:
-                    return EventSchemaResponseSchema(**json.loads(cached))
+                if cached is not None:
+                    data = json.loads(cached)
+                    if data is None:
+                        return None
+                    return EventSchemaResponseSchema(**data)
             except Exception as e:
                 print(f"Redis schema cache read error: {e}")
 
@@ -97,6 +100,11 @@ class SchemaRegistryService:
         record = result.scalars().first()
 
         if not record:
+            if self.redis:
+                try:
+                    await self.redis.set(cache_key, "null", ex=60)
+                except Exception:
+                    pass
             return None
 
         schema_resp = EventSchemaResponseSchema.model_validate(record)

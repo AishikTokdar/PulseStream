@@ -25,16 +25,17 @@ SENSITIVE_KEY_PATTERNS = {
 class PIIRedactionService:
     @classmethod
     def redact_string(cls, text: str) -> Tuple[str, int]:
+        # Fast path: All PII regexes (credit card, SSN, phone) strictly require digits.
+        if not any(c.isdigit() for c in text):
+            return text, 0
+
         count = 0
-        if CREDIT_CARD_REGEX.search(text):
-            text, c = CREDIT_CARD_REGEX.subn("[REDACTED_CREDIT_CARD]", text)
-            count += c
-        if SSN_REGEX.search(text):
-            text, c = SSN_REGEX.subn("[REDACTED_SSN]", text)
-            count += c
-        if PHONE_REGEX.search(text):
-            text, c = PHONE_REGEX.subn("[REDACTED_PHONE]", text)
-            count += c
+        text, c = CREDIT_CARD_REGEX.subn("[REDACTED_CREDIT_CARD]", text)
+        count += c
+        text, c = SSN_REGEX.subn("[REDACTED_SSN]", text)
+        count += c
+        text, c = PHONE_REGEX.subn("[REDACTED_PHONE]", text)
+        count += c
         return text, count
 
     @classmethod
@@ -44,7 +45,7 @@ class PIIRedactionService:
 
         for key, val in data.items():
             lower_key = key.lower()
-            if any(sens in lower_key for sens in SENSITIVE_KEY_PATTERNS):
+            if lower_key in SENSITIVE_KEY_PATTERNS or any(sens in lower_key for sens in SENSITIVE_KEY_PATTERNS):
                 sanitized[key] = "[REDACTED_SECRET]"
                 total_redacted += 1
             elif isinstance(val, dict):

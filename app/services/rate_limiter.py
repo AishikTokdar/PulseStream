@@ -24,7 +24,7 @@ class RateLimiter:
         # Use redis pipeline
         async with self.redis.pipeline(transaction=True) as pipe:
             pipe.zremrangebyscore(key, 0, clear_before)
-            pipe.zadd(key, {str(current_time): current_time})
+            pipe.zadd(key, {f"{current_time}:{time.time_ns()}": current_time})
             pipe.zcard(key)
             pipe.expire(key, self.window_seconds)
             results = await pipe.execute()

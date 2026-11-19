@@ -85,26 +85,24 @@ async def ingest_batch_events(
     event_service = EventService(db, redis_client)
     batch_result = await event_service.ingest_batch(events_in)
 
-    # Broadcast batch to WebSockets and trigger worker tasks
-    for ev in batch_result.events:
+    # Broadcast batch notification to WebSockets and trigger worker tasks
+    if batch_result.events:
         await ws_manager.broadcast_to_tenant(
-            ev.tenant_id,
+            tenant_id,
             {
-                "type": "event_ingested",
-                "event_id": str(ev.id),
-                "tenant_id": ev.tenant_id,
-                "event_type": ev.event_type,
-                "timestamp": ev.timestamp.isoformat() if ev.timestamp else None,
-                "payload": ev.payload,
+                "type": "batch_ingested",
+                "tenant_id": tenant_id,
+                "count": batch_result.ingested_count,
             },
         )
-        try:
-            enrich_and_process_event_task.delay(str(ev.id))
-            dispatch_webhook_event_task.delay(
-                str(ev.id), ev.tenant_id, ev.event_type, ev.payload
-            )
-        except Exception:
-            pass
+        for ev in batch_result.events:
+            try:
+                enrich_and_process_event_task.delay(str(ev.id))
+                dispatch_webhook_event_task.delay(
+                    str(ev.id), ev.tenant_id, ev.event_type, ev.payload
+                )
+            except Exception:
+                pass
 
     return batch_result
 
